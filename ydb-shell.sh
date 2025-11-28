@@ -16,21 +16,26 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Verbose flag (default: off)
+VERBOSE=false
+
 # Function to print colored messages
 print_info() {
-    echo -e "${BLUE}[INFO]${NC}    $1"
+    if [ "$VERBOSE" = true ]; then
+        echo -e "$1"
+    fi
 }
 
 print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    echo -e "${GREEN}$1${NC}"
 }
 
 print_error() {
-    echo -e "${RED}[ERROR]${NC}   $1"
+    echo -e "${RED}$1${NC}" >&2
 }
 
 print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+    echo -e "${YELLOW}$1${NC}"
 }
 
 # Parse command line arguments
@@ -61,6 +66,10 @@ parse_args() {
                 NO_PASSWORD_FLAG=true
                 shift
                 ;;
+            -v|--verbose)
+                VERBOSE=true
+                shift
+                ;;
             -h|--help)
                 echo "Usage: $0 [OPTIONS]"
                 echo ""
@@ -71,6 +80,7 @@ parse_args() {
                 echo "  --user NAME                   User name (env: YDB_USER)"
                 echo "  --password-file PATH          Password file (env: YDB_PASSWORD)"
                 echo "  --no-password                 Use anonymous authentication (no password)"
+                echo "  -v, --verbose                 Enable verbose output (show INFO messages)"
                 echo "  -h, --help                    Show this help"
                 echo ""
                 echo "Environment variables with defaults:"
@@ -237,7 +247,6 @@ get_token() {
         fi
     else
         # No password provided - let YDB prompt for it interactively
-        echo -e -n "${BLUE}[INFO]${NC}    "  # Ydb will print it's prompt here
         if "${cmd[@]}" auth get-token --force > "$token_file" ; then
             print_success "Token obtained successfully"
             return 0
@@ -314,11 +323,11 @@ EOF
 
 # Main function
 main() {
+    # Parse command line arguments first to get verbose flag
+    parse_args "$@"
+    
     print_info "Starting YDB Interactive Shell"
     print_info ""
-    
-    # Parse command line arguments
-    parse_args "$@"
     
     # Set default values
     set_defaults
@@ -344,10 +353,8 @@ main() {
     # Create aliases
     create_aliases "$token_file" "$aliases_file" "$original_ps1"
     
-    print_info ""
     print_success "YDB Interactive Shell is ready!"
     print_info "Token file: $token_file"
-    print_info ""
     
     # Determine shell
     local shell_cmd="${SHELL:-/bin/bash}"
@@ -361,7 +368,6 @@ main() {
         bash --rcfile "$aliases_file"
     fi
     
-    print_info ""
     print_info "Exiting YDB Interactive Shell"
 }
 
