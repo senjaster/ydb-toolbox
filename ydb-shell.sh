@@ -6,9 +6,6 @@
 
 # set -e
 
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 # Color codes for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -18,6 +15,9 @@ NC='\033[0m' # No Color
 
 # Verbose flag (default: off)
 VERBOSE=false
+
+# SSH remote host (if provided, script will upload itself and run remotely)
+SSH_REMOTE=""
 
 # Function to print colored messages
 print_info() {
@@ -42,6 +42,10 @@ print_warning() {
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
+            --ssh)
+                SSH_REMOTE="$2"
+                shift 2
+                ;;
             -e|--endpoint)
                 ENDPOINT_ARG="$2"
                 shift 2
@@ -74,6 +78,7 @@ parse_args() {
                 echo "Usage: $0 [OPTIONS]"
                 echo ""
                 echo "Options:"
+                echo "  --ssh USER@HOST               Run script on remote host via SSH"
                 echo "  -e, --endpoint HOST[:PORT]    YDB endpoint (env: YDB_ENDPOINT)"
                 echo "  -d, --database PATH           Database path (env: YDB_DATABASE)"
                 echo "  --ca-file PATH                CA certificate file (env: YDB_CA_FILE)"
@@ -94,6 +99,17 @@ parse_args() {
                 echo "  - If YDB_PASSWORD env var is set, it will be used"
                 echo "  - If --no-password is provided, anonymous authentication is used"
                 echo "  - Otherwise, YDB will prompt for password interactively"
+                echo ""
+                echo "SSH mode:"
+                echo "  When --ssh is provided, the script uploads itself to the remote host"
+                echo "  and executes there. Local environment variables (YDB_*) are passed"
+                echo "  to the remote host automatically. Password file is not supported."
+                echo ""
+                echo "Examples:"
+                echo "  Connect to remote host and run script there:"
+                echo "  $0 --ssh user@ydb-server.example.com -d /cluster/db"
+                echo "  Run script locally (you should already be connected to ydb node)"
+                echo "  $0 --user ydb_admin --ca-file ./ca.crt"
                 exit 0
                 ;;
             *)
@@ -159,19 +175,13 @@ set_defaults() {
     fi
 }
 
-# Find YDB binary in PATH, script directory, or /opt/ydb/bin
+# Find YDB binary in PATH or /opt/ydb/bin
 find_ydb_binary() {
     local binary_name="$1"
     
     # Check in PATH
     if command -v "$binary_name" &> /dev/null; then
         command -v "$binary_name"
-        return 0
-    fi
-    
-    # Check in script directory
-    if [ -x "$SCRIPT_DIR/$binary_name" ]; then
-        echo "$SCRIPT_DIR/$binary_name"
         return 0
     fi
     
@@ -216,7 +226,7 @@ check_binaries() {
     
     if [ ${#missing_bins[@]} -ne 0 ]; then
         print_error "Required YDB binaries not found: ${missing_bins[*]}"
-        print_error "Please ensure YDB tools are installed in PATH, $SCRIPT_DIR, or /opt/ydb/bin"
+        print_error "Please ensure YDB tools are installed in PATH or /opt/ydb/bin"
         exit 1
     fi
 }
@@ -228,7 +238,7 @@ get_token() {
     print_info "Obtaining authentication token for user: $YDB_USER"
     
     # Build command with explicit parameters
-    local cmd=("$YDB_BIN" -e "$YDB_ENDPOINT" -d "$YDB_DATABASE" --ca-file "$YDB_CA_FILE" --user "$YDB_USER")
+    local cmd=($YDB_BIN -e "$YDB_ENDPOINT" -d "$YDB_DATABASE" --ca-file "$YDB_CA_FILE" --user "$YDB_USER")
     
     # Determine authentication method
     if [ "$NO_PASSWORD_FLAG" = true ]; then
@@ -321,10 +331,75 @@ ydb-help
 EOF
 }
 
+# Execute script on remote host via SSH
+execute_remote() {
+    local ssh_host="$1"
+    shift
+    local args=("$@")
+    
+    echo "Uploading script to $ssh_host..."
+    
+    # Get the script path
+    local script_path="${BASH_SOURCE[0]}"
+    local remote_script="/tmp/ydb-shell-$$.sh"
+    
+    # Upload the script to remote host
+    if ! scp -q "$script_path" "$ssh_host:$remote_script"; then
+        print_error "Failed to upload script to remote host"
+        exit 1
+    fi
+    
+    # Build environment variable exports for remote execution
+    local env_exports=""
+    
+    # Pass YDB environment variables if they are set locally
+    if [ -n "$YDB_ENDPOINT" ]; then
+        env_exports+="export YDB_ENDPOINT='$YDB_ENDPOINT'; "
+    fi
+    if [ -n "$YDB_DATABASE" ]; then
+        env_exports+="export YDB_DATABASE='$YDB_DATABASE'; "
+    fi
+    if [ -n "$YDB_CA_FILE" ]; then
+        env_exports+="export YDB_CA_FILE='$YDB_CA_FILE'; "
+    fi
+    if [ -n "$YDB_USER" ]; then
+        env_exports+="export YDB_USER='$YDB_USER'; "
+    fi
+    if [ -n "$YDB_PASSWORD" ]; then
+        env_exports+="export YDB_PASSWORD='$YDB_PASSWORD'; "
+    fi
+    
+    # Build the remote command with environment variables and arguments
+    # Remove --ssh argument from args to avoid infinite loop
+    local remote_args=()
+    local skip_next=false
+    for arg in "${args[@]}"; do
+        if [ "$skip_next" = true ]; then
+            skip_next=false
+            continue
+        fi
+        if [ "$arg" = "--ssh" ]; then
+            skip_next=true
+            continue
+        fi
+        remote_args+=("$arg")
+    done
+    
+    # Execute on remote host with environment variables, then cleanup
+    echo "Executing on remote host..."
+    ssh -t "$ssh_host" "${env_exports}chmod +x '$remote_script' && '$remote_script' ${remote_args[*]} ; rm -f '$remote_script'"
+}
+
 # Main function
 main() {
-    # Parse command line arguments first to get verbose flag
+    # Parse command line arguments first to get verbose flag and SSH remote
     parse_args "$@"
+    
+    # If SSH remote is specified, upload and execute remotely
+    if [ -n "$SSH_REMOTE" ]; then
+        execute_remote "$SSH_REMOTE" "$@"
+        exit $?
+    fi
     
     print_info "Starting YDB Interactive Shell"
     print_info ""
