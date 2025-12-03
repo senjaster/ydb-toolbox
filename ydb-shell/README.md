@@ -1,31 +1,32 @@
 # YDB Interactive Shell
 
-Интерактивная оболочка для удобной работы с YDB, которая избавляет от необходимости каждый раз указывать параметры аутентификации и подключения.
+Интерактивная оболочка для удобной работы с cli-командами YDB, которая избавляет от необходимости каждый раз указывать параметры аутентификации и подключения.
 
 ## Зачем это нужно?
 
-При работе с YDB напрямую приходится каждый раз указывать множество параметров:
+При работе с cli напрямую приходится каждый раз указывать множество параметров:
 
 ```bash
 # Без скрипта - длинные команды с повторяющимися параметрами
 /opt/ydb/bin/ydb -e grpcs://ydb-node-1:2135 -d /my-cluster --ca-file /opt/ydb/certs/ca.crt --user root auth get-token --force > /tmp/token
 /opt/ydb/bin/ydb-dstool -e grpcs://ydb-node-1:2135 --ca-file /opt/ydb/certs/ca.crt --token-file /tmp/token pdisk list
-/opt/ydb/bin/ydbd -s grpcs://ydb-node-1:2135 --ca-file /opt/ydb/certs/ca.crt -f /tmp/token admin database /test/db create ssd:32
+/opt/ydb/bin/ydbd -s grpcs://ydb-node-1:2135 --ca-file /opt/ydb/certs/ca.crt -f /tmp/token admin database /my-cluster/mydb create ssd:32
 ```
 
 **YDB Shell** позволяет один раз авторизоваться и затем вызывать команды без указания всех параметров подключения каждый раз.
 
 ## Примеры использования
 
-### 1. Локальный запуск на узле
+### 1. Локальный запуск на узле кластера
 
 ```bash
 # Запускаем интерактивную оболочку
 ./ydb-shell.sh -d /my-cluster
+# Будет выдано приглашение ввести пароль
 
 # Теперь доступны короткие команды
 ydb-dstool pdisk list
-ydbd admin database /test/mydb create ssd:32
+ydbd admin database /my-cluster/mydb create ssd:32
 
 # Выход из оболочки
 exit
@@ -46,6 +47,7 @@ YDB Shell умеет подключаться к узлу кластера по 
 # Устанавливаем локальные переменные окружения
 export YDB_DATABASE=/cluster/production
 export YDB_USER=admin
+export YDB_PASSWORD=my-super-password
 
 # Подключаемся к удаленному хосту.
 # Переменные окружения передаются автоматически
@@ -78,7 +80,8 @@ exit
   --ca-file ./ca.crt \
   -v
 
-# Важно: файл ca.crt уже должен находиться в домашней папке на  удаленном сервере
+# Важно: файл ca.crt уже должен находиться на удаленном сервере
+# Нельзя использовать ~ (тильда) в пути файла
 
 # Теперь мы находимся в ssh-сессии на удаленном узле
 ydb scheme ls /cluster/custom_database
