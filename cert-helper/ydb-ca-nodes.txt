@@ -1,0 +1,4 @@
+static-node-1.ydb-cluster.com
+static-node-2.ydb-cluster.com
+static-node-3.ydb-cluster.com
+
