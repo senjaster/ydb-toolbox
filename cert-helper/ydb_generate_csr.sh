@@ -185,8 +185,8 @@ echo ""
         # Extract the first part of the FQDN as CN (e.g., "node1" from "node1.example.com")
         node_cn=$(echo "$node" | cut -d'.' -f1)
         
-        # Create safe filename (replace special characters)
-        safe_node=$(echo "$node" | tr '*$/' '___')
+        # Create safe filename from short name (replace special characters)
+        safe_node=$(echo "$node_cn" | tr '*$/' '___')
         
         # Generate configuration, key, and CSR
         make_node_conf "$safe_node" "$node" "$node_cn" "$node2"

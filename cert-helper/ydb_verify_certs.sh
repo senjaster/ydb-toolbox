@@ -549,7 +549,9 @@ if [ -f "$NODES_FILE" ]; then
     expected_nodes=""
     while read -r node rest; do
         if [ ! -z "$node" ]; then
-            safe_node=$(echo "$node" | tr '*$/' '___')
+            # Extract short name from FQDN
+            node_cn=$(echo "$node" | cut -d'.' -f1)
+            safe_node=$(echo "$node_cn" | tr '*$/' '___')
             expected_nodes="$expected_nodes $safe_node"
         fi
     done < "$NODES_FILE"
@@ -590,7 +592,9 @@ failed_nodes=0
 
 # If specific node is specified, verify only that node
 if [ ! -z "$NODE_NAME" ]; then
-    safe_node=$(echo "$NODE_NAME" | tr '*$/' '___')
+    # Extract short name from FQDN if provided
+    node_cn=$(echo "$NODE_NAME" | cut -d'.' -f1)
+    safe_node=$(echo "$node_cn" | tr '*$/' '___')
     
     if [ ! -d "nodes/$safe_node" ]; then
         echo "${RED}** Error: Node directory not found: nodes/$safe_node${NC}"

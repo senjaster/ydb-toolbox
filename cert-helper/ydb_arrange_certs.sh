@@ -89,8 +89,11 @@ for cert_file in "$CERTS_DIR"/*.crt; do
             continue
         fi
         
-        # Extract node name (remove .crt extension)
-        node_name=$(basename "$cert_file" .crt)
+        # Extract node name from certificate filename (remove .crt extension)
+        cert_node_name=$(basename "$cert_file" .crt)
+        
+        # Extract short name from the certificate filename (first part before first dot)
+        node_name=$(echo "$cert_node_name" | cut -d'.' -f1)
         
         # Create node directory if it doesn't exist
         if [ ! -d "nodes/$node_name" ]; then
@@ -105,8 +108,8 @@ for cert_file in "$CERTS_DIR"/*.crt; do
         
         # Handle private key
         if [ "$COPY_KEYS" = true ]; then
-            # Copy key from certificates directory
-            key_file="$CERTS_DIR/$node_name.key"
+            # Copy key from certificates directory (using full cert filename)
+            key_file="$CERTS_DIR/$cert_node_name.key"
             if [ ! -f "$key_file" ]; then
                 echo "** Warning: Key file not found: $key_file, skipping $node_name"
                 continue
