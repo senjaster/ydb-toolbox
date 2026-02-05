@@ -130,10 +130,10 @@ EOF
         local vn=2
         local ip_count=1
         
-        # Add cluster name to DNS if specified
+        # Add cluster name to DNS if specified (as standalone FQDN)
         if [ ! -z "$CLUSTER_NAME" ]; then
             vn=$(echo "$vn + 1" | bc)
-            echo "DNS.$vn=${node_fqdn}.${CLUSTER_NAME}" >> ${cfile}
+            echo "DNS.$vn=${CLUSTER_NAME}" >> ${cfile}
         fi
         
         # Add additional DNS names if provided
@@ -141,12 +141,6 @@ EOF
             for nn in $alt_names; do
                 vn=$(echo "$vn + 1" | bc)
                 echo "DNS.$vn=$nn" >> ${cfile}
-                
-                # Also add cluster name variant for each alt name
-                if [ ! -z "$CLUSTER_NAME" ]; then
-                    vn=$(echo "$vn + 1" | bc)
-                    echo "DNS.$vn=${nn}.${CLUSTER_NAME}" >> ${cfile}
-                fi
             done
         fi
     fi
